@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genealogy Tree - WebXR AR/VR</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow: hidden;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            pointer-events: all;
+        }
+
+        .control-group {
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .control-group h3 {
+            margin-bottom: 18px;
+            font-size: 20px;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            border: none;
+            padding: 15px 25px;
+            border-radius: 30px;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        button.active {
+            background: linear-gradient(45deg, #10ac84, #00d2d3);
+            transform: scale(1.1);
+            box-shadow: 0 8px 25px rgba(16, 172, 132, 0.4);
+        }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+            opacity: 0.6;
+        }
+
+        button:disabled:hover {
+            transform: none;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            pointer-events: all;
+            max-width: 350px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        #status {
+            font-size: 16px;
+            color: #4ecdc4;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        #instructions {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #ddd;
+        }
+
+        .person-card {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .person-card h4 {
+            color: #fff;
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+
+        .person-card p {
+            color: #bbb;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+            z-index: 200;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top: 5px solid #4ecdc4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 25px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .xr-status {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            color: #4CAF50;
+            padding: 10px 15px;
+            border-radius: 25px;
+            font-size: 12px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .xr-status.error {
+            background: rgba(244, 67, 54, 0.2);
+            border-color: #f44336;
+            color: #f44336;
+        }
+
+        @media (max-width: 768px) {
+            #controls, #info-panel {
+                position: relative;
+                margin: 15px;
+            }
+            
+            #ui-overlay {
+                position: static;
+                height: auto;
+            }
+            
+            #canvas-container {
+                height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        
+        <div id="ui-overlay">
+            <div id="controls">
+                <div class="control-group fade-in">
+                    <h3>🌳 Viewing Mode</h3>
+                    <div class="button-group">
+                        <button id="normalBtn" class="active">3D View</button>
+                        <button id="vrBtn">Enter VR</button>
+                        <button id="arBtn">Enter AR</button>
+                    </div>
+                    <div id="xr-status" class="xr-status" style="display: none;"></div>
+                </div>
+                
+                <div class="control-group fade-in">
+                    <h3>🎮 Controls</h3>
+                    <div class="button-group">
+                        <button id="resetBtn">Reset View</button>
+                        <button id="expandBtn">Expand Tree</button>
+                        <button id="collapseBtn">Collapse Tree</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="info-panel" class="fade-in">
+                <div id="status">Ready to explore family tree</div>
+                <div id="instructions">
+                    <strong>Desktop Navigation:</strong><br>
+                    • Mouse: Rotate view<br>
+                    • Scroll: Zoom in/out<br>
+                    • Click: Select person<br><br>
+                    <strong>Quest 3 VR/AR:</strong><br>
+                    • Use hand tracking or controllers<br>
+                    • Point and pinch to select<br>
+                    • Natural hand movements to navigate
+                </div>
+                <div id="selected-person"></div>
+            </div>
+        </div>
+        
+        <div id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <div>Initializing WebXR...</div>
+        </div>
+    </div>
+
+    <script>
+        class GenealogyTreeXR {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.currentMode = 'normal';
+                this.xrSession = null;
+                this.xrReferenceSpace = null;
+                this.familyData = this.generateFamilyData();
+                this.personNodes = [];
+                this.connections = [];
+                this.selectedPerson = null;
+                this.controllers = [];
+                this.handModels = [];
+                this.raycaster = new THREE.Raycaster();
+                this.pointer = new THREE.Vector2();
+                
+                this.init();
+                this.setupEventListeners();
+                this.createFamilyTree();
+                this.checkXRSupport();
+                this.animate();
+            }
+
+            generateFamilyData() {
+                return {
+                    "Great-Grandparents": [
+                        { name: "William Smith", birth: "1920", death: "1995", position: [-8, 4, -2], info: "Farmer from Iowa" },
+                        { name: "Mary Smith", birth: "1922", death: "1998", position: [-4, 4, -2], info: "School teacher" },
+                        { name: "Robert Johnson", birth: "1918", death: "1992", position: [4, 4, -2], info: "World War II veteran" },
+                        { name: "Elizabeth Johnson", birth: "1920", death: "2001", position: [8, 4, -2], info: "Nurse and mother of 5" }
+                    ],
+                    "Grandparents": [
+                        { name: "John Smith", birth: "1945", death: "2020", position: [-4, 2, 0], info: "Engineer and inventor" },
+                        { name: "Patricia Johnson", birth: "1948", death: null, position: [4, 2, 0], info: "Artist and community leader" }
+                    ],
+                    "Parents": [
+                        { name: "Michael Smith", birth: "1970", death: null, position: [-2, 0, 2], info: "Software developer" },
+                        { name: "Sarah Smith", birth: "1972", death: null, position: [2, 0, 2], info: "Doctor and researcher" }
+                    ],
+                    "Current Generation": [
+                        { name: "David Smith", birth: "1995", death: null, position: [-3, -2, 4], info: "College student, studying biology" },
+                        { name: "Emma Smith", birth: "1998", death: null, position: [0, -2, 4], info: "High school graduate, aspiring artist" },
+                        { name: "James Smith", birth: "2001", death: null, position: [3, -2, 4], info: "High school student, loves technology" }
+                    ]
+                };
+            }
+
+            async checkXRSupport() {
+                const statusEl = document.getElementById('xr-status');
+                
+                if (!navigator.xr) {
+                    statusEl.textContent = 'WebXR not supported';
+                    statusEl.className = 'xr-status error';
+                    statusEl.style.display = 'block';
+                    document.getElementById('vrBtn').disabled = true;
+                    document.getElementById('arBtn').disabled = true;
+                    return;
+                }
+
+                try {
+                    const vrSupported = await navigator.xr.isSessionSupported('immersive-vr');
+                    const arSupported = await navigator.xr.isSessionSupported('immersive-ar');
+                    
+                    if (!vrSupported) {
+                        document.getElementById('vrBtn').disabled = true;
+                        document.getElementById('vrBtn').textContent = 'VR Not Available';
+                    }
+                    
+                    if (!arSupported) {
+                        document.getElementById('arBtn').disabled = true;
+                        document.getElementById('arBtn').textContent = 'AR Not Available';
+                    }
+                    
+                    if (vrSupported || arSupported) {
+                        statusEl.textContent = `WebXR Ready - VR: ${vrSupported ? '✓' : '✗'} AR: ${arSupported ? '✓' : '✗'}`;
+                        statusEl.className = 'xr-status';
+                        statusEl.style.display = 'block';
+                    } else {
+                        statusEl.textContent = 'No XR sessions supported';
+                        statusEl.className = 'xr-status error';
+                        statusEl.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('XR support check failed:', error);
+                    statusEl.textContent = 'XR support check failed';
+                    statusEl.className = 'xr-status error';
+                    statusEl.style.display = 'block';
+                }
+            }
+
+            init() {
+                const container = document.getElementById('canvas-container');
+                
+                // Scene setup
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x0a0a0a);
+                
+                // Camera setup
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 0, 12);
+                
+                // Renderer setup with WebXR
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.xr.enabled = true;
+                container.appendChild(this.renderer.domElement);
+                
+                // Lighting setup
+                this.setupLighting();
+                
+                // Add environmental elements
+                this.createEnvironment();
+                
+                // Setup mouse/touch controls for desktop
+                this.setupMouseControls();
+                
+                // Setup XR controllers
+                this.setupXRControllers();
+                
+                window.addEventListener('resize', () => this.onWindowResize());
+            }
+
+            setupLighting() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+                this.scene.add(ambientLight);
+                
+                // Main directional light
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 10, 5);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                this.scene.add(directionalLight);
+                
+                // Accent lights for dramatic effect
+                const accentLight1 = new THREE.PointLight(0x4ecdc4, 0.5, 20);
+                accentLight1.position.set(-10, 5, 0);
+                this.scene.add(accentLight1);
+                
+                const accentLight2 = new THREE.PointLight(0xff6b6b, 0.5, 20);
+                accentLight2.position.set(10, -5, 0);
+                this.scene.add(accentLight2);
+            }
+
+            createEnvironment() {
+                // Particle system for atmosphere
+                const particleGeometry = new THREE.BufferGeometry();
+                const particleCount = 200;
+                const positions = new Float32Array(particleCount * 3);
+                const colors = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i * 3] = (Math.random() - 0.5) * 50;
+                    positions[i * 3 + 1] = (Math.random() - 0.5) * 50;
+                    positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+                    
+                    colors[i * 3] = Math.random();
+                    colors[i * 3 + 1] = Math.random();
+                    colors[i * 3 + 2] = Math.random();
+                }
+                
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
+                const particleMaterial = new THREE.PointsMaterial({
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.6,
+                    vertexColors: true
+                });
+                
+                const particles = new THREE.Points(particleGeometry, particleMaterial);
+                this.scene.add(particles);
+                
+                // Add a subtle grid for spatial reference in VR/AR
+                const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+                gridHelper.position.y = -6;
+                this.scene.add(gridHelper);
+            }
+
+            setupXRControllers() {
+                // Setup VR controllers
+                for (let i = 0; i < 2; i++) {
+                    const controller = this.renderer.xr.getController(i);
+                    controller.addEventListener('selectstart', (event) => this.onSelectStart(event));
+                    controller.addEventListener('selectend', (event) => this.onSelectEnd(event));
+                    controller.addEventListener('select', (event) => this.onSelect(event));
+                    this.scene.add(controller);
+                    this.controllers.push(controller);
+                    
+                    // Add controller ray
+                    const geometry = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(0, 0, 0),
+                        new THREE.Vector3(0, 0, -1)
+                    ]);
+                    const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x4ecdc4 }));
+                    line.name = 'ray';
+                    line.scale.z = 5;
+                    controller.add(line);
+                }
+                
+                // Setup hand tracking (Quest 3 specific)
+                if (this.renderer.xr.getHand) {
+                    for (let i = 0; i < 2; i++) {
+                        const hand = this.renderer.xr.getHand(i);
+                        this.scene.add(hand);
+                        this.handModels.push(hand);
+                    }
+                }
+            }
+
+            setupMouseControls() {
+                let isMouseDown = false;
+                let mouseX = 0, mouseY = 0;
+                let targetRotationX = 0, targetRotationY = 0;
+                let rotationX = 0, rotationY = 0;
+                
+                this.renderer.domElement.addEventListener('mousedown', (event) => {
+                    isMouseDown = true;
+                    this.onPointerMove(event);
+                });
+                
+                this.renderer.domElement.addEventListener('mousemove', (event) => {
+                    this.onPointerMove(event);
+                    
+                    if (isMouseDown) {
+                        mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+                        mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+                        
+                        targetRotationX = mouseY * 0.5;
+                        targetRotationY = mouseX * 0.5;
+                    }
+                });
+                
+                this.renderer.domElement.addEventListener('mouseup', () => {
+                    isMouseDown = false;
+                });
+                
+                this.renderer.domElement.addEventListener('click', (event) => {
+                    this.onPointerClick(event);
+                });
+                
+                this.renderer.domElement.addEventListener('wheel', (event) => {
+                    this.camera.position.z += event.deltaY * 0.01;
+                    this.camera.position.z = Math.max(3, Math.min(25, this.camera.position.z));
+                });
+                
+                // Smooth rotation animation
+                const updateRotation = () => {
+                    if (!this.renderer.xr.isPresenting) {
+                        rotationX += (targetRotationX - rotationX) * 0.05;
+                        rotationY += (targetRotationY - rotationY) * 0.05;
+                        
+                        this.scene.rotation.x = rotationX;
+                        this.scene.rotation.y = rotationY;
+                    }
+                    
+                    requestAnimationFrame(updateRotation);
+                };
+                updateRotation();
+            }
+
+            onPointerMove(event) {
+                this.pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+                this.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            }
+
+            onPointerClick(event) {
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                const intersects = this.raycaster.intersectObjects(
+                    this.personNodes.map(node => node.node.children[0])
+                );
+                
+                if (intersects.length > 0) {
+                    this.selectPerson(intersects[0].object.userData);
+                }
+            }
+
+            onSelectStart(event) {
+                // VR controller selection start
+            }
+
+            onSelectEnd(event) {
+                // VR controller selection end
+            }
+
+            onSelect(event) {
+                // VR controller selection
+                const controller = event.target;
+                const tempMatrix = new THREE.Matrix4();
+                tempMatrix.identity().extractRotation(controller.matrixWorld);
+                
+                this.raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+                this.raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+                
+                const intersects = this.raycaster.intersectObjects(
+                    this.personNodes.map(node => node.node.children[0])
+                );
+                
+                if (intersects.length > 0) {
+                    this.selectPerson(intersects[0].object.userData);
+                }
+            }
+
+            selectPerson(person) {
+                this.selectedPerson = person;
+                const selectedEl = document.getElementById('selected-person');
+                
+                if (person) {
+                    selectedEl.innerHTML = `
+                        <div class="person-card">
+                            <h4>${person.name}</h4>
+                            <p><strong>Born:</strong> ${person.birth}</p>
+                            ${person.death ? `<p><strong>Died:</strong> ${person.death}</p>` : '<p><strong>Status:</strong> Living</p>'}
+                            <p><strong>Info:</strong> ${person.info}</p>
+                        </div>
+                    `;
+                    
+                    // Highlight selected person
+                    this.personNodes.forEach(({node, person: p}) => {
+                        const sphere = node.children[0];
+                        if (p === person) {
+                            sphere.material.emissive.setHex(0x444444);
+                            node.scale.set(1.3, 1.3, 1.3);
+                        } else {
+                            sphere.material.emissive.setHex(0x000000);
+                            node.scale.set(1, 1, 1);
+                        }
+                    });
+                } else {
+                    selectedEl.innerHTML = '';
+                }
+            }
+
+            createFamilyTree() {
+                // Clear existing nodes
+                this.personNodes.forEach(({node}) => this.scene.remove(node));
+                this.connections.forEach(line => this.scene.remove(line));
+                this.personNodes = [];
+                this.connections = [];
+                
+                // Create person nodes for each generation
+                Object.entries(this.familyData).forEach(([generation, people]) => {
+                    people.forEach(person => {
+                        const node = this.createPersonNode(person);
+                        this.personNodes.push({ node, person, generation });
+                        this.scene.add(node);
+                    });
+                });
+                
+                // Create connections between generations
+                this.createConnections();
+            }
+
+            createPersonNode(person) {
+                const group = new THREE.Group();
+                
+                // Main sphere for person
+                const geometry = new THREE.SphereGeometry(0.4, 32, 32);
+                const material = new THREE.MeshPhongMaterial({
+                    color: person.death ? 0x666666 : 0x4a90e2,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                
+                const sphere = new THREE.Mesh(geometry, material);
+                sphere.castShadow = true;
+                sphere.receiveShadow = true;
+                sphere.userData = person;
+                group.add(sphere);
+                
+                // Outer glow ring
+                const ringGeometry = new THREE.RingGeometry(0.5, 0.6, 32);
+                const ringMaterial = new THREE.MeshBasicMaterial({
+                    color: person.death ? 0x333333 : 0x7bb3f0,
+                    transparent: true,
+                    opacity: 0.4,
+                    side: THREE.DoubleSide
+                });
+                const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                ring.rotation.x = Math.PI / 2;
+                group.add(ring);
+                
+                // Name label geometry (3D text would be better but this works)
+                const labelGeometry = new THREE.PlaneGeometry(2, 0.3);
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 64;
+                const context = canvas.getContext('2d');
+                context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                context.fillRect(0, 0, 512, 64);
+                context.fillStyle = 'black';
+                context.font = '32px Arial';
+                context.textAlign = 'center';
+                context.fillText(person.name, 256, 40);
+                
+                const labelTexture = new THREE.CanvasTexture(canvas);
+                const labelMaterial = new THREE.MeshBasicMaterial({
+                    map: labelTexture,
+                    transparent: true
+                });
+                const label = new THREE.Mesh(labelGeometry, labelMaterial);
+                label.position.set(0, 0.8, 0);
+                group.add(label);
+                
+                // Position the group
+                group.position.set(...person.position);
+                
+                return group;
+            }
+
+            createConnections() {
+                // Connect great-grandparents to grandparents
+                this.createConnection(this.familyData["Great-Grandparents"][0], this.familyData["Grandparents"][0]);
+                this.createConnection(this.familyData["Great-Grandparents"][1], this.familyData["Grandparents"][0]);
+                this.createConnection(this.familyData["Great-Grandparents"][2], this.familyData["Grandparents"][1]);
+                this.createConnection(this.familyData["Great-Grandparents"][3], this.familyData["Grandparents"][1]);
+                
+                // Connect grandparents to parents
+                this.createConnection(this.familyData["Grandparents"][0], this.familyData["Parents"][0]);
+                this.createConnection(this.familyData["Grandparents"][1], this.familyData["Parents"][1]);
+                
+                // Connect parents to current generation
+                this.familyData["Current Generation"].forEach(child => {
+                    this.createConnection(this.familyData["Parents"][0], child);
+                    this.createConnection(this.familyData["Parents"][1], child);
+                });
+            }
+
+            createConnection(person1, person2) {
+                const points = [
+                    new THREE.Vector3(...person1.position),
+                    new THREE.Vector3(...person2.position)
+                ];
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: 0x888888,
+                    transparent: true,
+                    opacity: 0.7,
+                    linewidth: 2
+                });
+                
+                const line = new THREE.Line(geometry, material);
+                this.scene.add(line);
+                this.connections.push(line);
+            }
+
+            setupEventListeners() {
+                // Mode buttons
+                document.getElementById('normalBtn').addEventListener('click', () => this.setMode('normal'));
+                document.getElementById('vrBtn').addEventListener('click', () => this.startVR());
+                document.getElementById('arBtn').addEventListener('click', () => this.startAR());
+                
+                // Control buttons
+                document.getElementById('resetBtn').addEventListener('click', () => this.resetView());
+                document.getElementById('expandBtn').addEventListener('click', () => this.expandAll());
+                document.getElementById('collapseBtn').addEventListener('click', () => this.collapseAll());
+            }
+
+            setMode(mode) {
+                // Update active button
+                document.querySelectorAll('#controls .button-group button').forEach(btn => {
+                    if (btn.id.includes('Btn')) btn.classList.remove('active');
+                });
+                document.getElementById(mode + 'Btn').classList.add('active');
+                
+                this.currentMode = mode;
+                document.getElementById('status').textContent = `Viewing in ${mode} mode`;
+            }
+
+            async startVR() {
+                if (!navigator.xr) {
+                    alert('WebXR not supported');
+                    return;
+                }
+
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('status').textContent = 'Starting VR session...';
+                    
+                    const sessionInit = {
+                        requiredFeatures: ['local-floor'],
+                        optionalFeatures: ['hand-tracking', 'layers']
+                    };
+                    
+                    this.xrSession = await navigator.xr.requestSession('immersive-vr', sessionInit);
+                    this.xrSession.addEventListener('end', () => this.onXRSessionEnd());
+                    
+                    await this.renderer.xr.setSession(this.xrSession);
+                    this.xrReferenceSpace = await this.xrSession.requestReferenceSpace('local-floor');
+                    
+                    // Adjust scene for VR
+                    this.setupVREnvironment();
+                    
+                    this.setMode('vr');
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('status').textContent = 'VR session active - Use controllers or hands to interact';
+                    
+                } catch (error) {
+                    console.error('Failed to start VR session:', error);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('status').textContent = 'Failed to start VR session';
+                    alert('Failed to start VR session: ' + error.message);
+                }
+            }
+
+            async startAR() {
+                if (!navigator.xr) {
+                    alert('WebXR not supported');
+                    return;
+                }
+
+                try {
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('status').textContent = 'Starting AR session...';
+                    
+                    const sessionInit = {
+                        requiredFeatures: ['local-floor'],
+                        optionalFeatures: ['hand-tracking', 'layers', 'dom-overlay'],
+                        domOverlay: { root: document.getElementById('ui-overlay') }
+                    };
+                    
+                    this.xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
+                    this.xrSession.addEventListener('end', () => this.onXRSessionEnd());
+                    
+                    await this.renderer.xr.setSession(this.xrSession);
+                    this.xrReferenceSpace = await this.xrSession.requestReferenceSpace('local-floor');
+                    
+                    // Adjust scene for AR
+                    this.setupAREnvironment();
+                    
+                    this.setMode('ar');
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('status').textContent = 'AR session active - Family tree overlaid on real world';
+                    
+                } catch (error) {
+                    console.error('Failed to start AR session:', error);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('status').textContent = 'Failed to start AR session';
+                    alert('Failed to start AR session: ' + error.message);
+                }
+            }
+
+            setupVREnvironment() {
+                // Remove desktop background for VR
+                this.scene.background = new THREE.Color(0x000011);
+                
+                // Add VR-specific environment
+                const skyGeometry = new THREE.SphereGeometry(100, 32, 32);
+                const skyMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x001122,
+                    side: THREE.BackSide,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+                this.scene.add(sky);
+                
+                // Scale up the family tree for VR viewing
+                this.personNodes.forEach(({node}) => {
+                    node.scale.multiplyScalar(1.5);
+                });
+                
+                // Add floor for reference
+                const floorGeometry = new THREE.PlaneGeometry(50, 50);
+                const floorMaterial = new THREE.MeshLambertMaterial({
+                    color: 0x333333,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.position.y = -8;
+                this.scene.add(floor);
+            }
+
+            setupAREnvironment() {
+                // Make background transparent for AR
+                this.scene.background = null;
+                this.renderer.setClearColor(0x000000, 0);
+                
+                // Enhance lighting for AR
+                const arLight = new THREE.DirectionalLight(0xffffff, 1.5);
+                arLight.position.set(0, 10, 10);
+                arLight.castShadow = true;
+                this.scene.add(arLight);
+                
+                // Scale down for AR table-top viewing
+                this.personNodes.forEach(({node}) => {
+                    node.scale.multiplyScalar(0.7);
+                    node.position.multiplyScalar(0.8);
+                });
+                
+                // Add subtle shadows for AR grounding
+                const shadowPlane = new THREE.PlaneGeometry(20, 20);
+                const shadowMaterial = new THREE.ShadowMaterial({
+                    opacity: 0.3
+                });
+                const shadow = new THREE.Mesh(shadowPlane, shadowMaterial);
+                shadow.rotation.x = -Math.PI / 2;
+                shadow.position.y = -6;
+                shadow.receiveShadow = true;
+                this.scene.add(shadow);
+            }
+
+            onXRSessionEnd() {
+                this.xrSession = null;
+                this.xrReferenceSpace = null;
+                
+                // Reset environment
+                this.scene.background = new THREE.Color(0x0a0a0a);
+                this.renderer.setClearColor(0x0a0a0a, 1);
+                
+                // Reset scale and positions
+                this.personNodes.forEach(({node, person}) => {
+                    node.scale.set(1, 1, 1);
+                    node.position.set(...person.position);
+                });
+                
+                this.setMode('normal');
+                document.getElementById('status').textContent = 'XR session ended - Back to 3D view';
+            }
+
+            resetView() {
+                if (!this.renderer.xr.isPresenting) {
+                    this.camera.position.set(0, 0, 12);
+                    this.scene.rotation.set(0, 0, 0);
+                }
+                
+                // Reset all node scales and positions
+                this.personNodes.forEach(({node, person}) => {
+                    node.scale.set(1, 1, 1);
+                    node.position.set(...person.position);
+                });
+                
+                this.selectedPerson = null;
+                document.getElementById('selected-person').innerHTML = '';
+                document.getElementById('status').textContent = 'View reset to default position';
+            }
+
+            expandAll() {
+                const expansionFactor = this.renderer.xr.isPresenting ? 1.3 : 1.5;
+                
+                this.personNodes.forEach(({node, person}) => {
+                    const newPos = node.position.clone().multiplyScalar(expansionFactor);
+                    
+                    // Animate expansion
+                    const startPos = node.position.clone();
+                    const duration = 1000; // 1 second
+                    const startTime = Date.now();
+                    
+                    const animate = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+                        const eased = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+                        
+                        node.position.lerpVectors(startPos, newPos, eased);
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        }
+                    };
+                    animate();
+                });
+                
+                // Update connections
+                setTimeout(() => {
+                    this.connections.forEach(line => this.scene.remove(line));
+                    this.connections = [];
+                    this.createConnections();
+                }, 500);
+                
+                document.getElementById('status').textContent = 'Family tree expanded for better viewing';
+            }
+
+            collapseAll() {
+                this.personNodes.forEach(({node, person}) => {
+                    const targetPos = new THREE.Vector3(...person.position);
+                    
+                    // Animate collapse
+                    const startPos = node.position.clone();
+                    const duration = 1000; // 1 second
+                    const startTime = Date.now();
+                    
+                    const animate = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+                        const eased = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+                        
+                        node.position.lerpVectors(startPos, targetPos, eased);
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        }
+                    };
+                    animate();
+                });
+                
+                // Update connections
+                setTimeout(() => {
+                    this.connections.forEach(line => this.scene.remove(line));
+                    this.connections = [];
+                    this.createConnections();
+                }, 500);
+                
+                document.getElementById('status').textContent = 'Family tree collapsed to original positions';
+            }
+
+            onWindowResize() {
+                if (!this.renderer.xr.isPresenting) {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                }
+            }
+
+            animate() {
+                // Use XR-compatible animation loop
+                this.renderer.setAnimationLoop(() => this.render());
+            }
+
+            render() {
+                const time = Date.now() * 0.001;
+                
+                // Animate person nodes with gentle floating motion
+                this.personNodes.forEach(({node}, index) => {
+                    const originalY = node.userData?.originalY || node.position.y;
+                    if (!node.userData?.originalY) {
+                        node.userData = { originalY: node.position.y };
+                    }
+                    
+                    node.position.y = originalY + Math.sin(time + index * 0.5) * 0.1;
+                    node.rotation.y = Math.sin(time + index * 0.3) * 0.1;
+                    
+                    // Gentle glow animation
+                    if (node.children[1]) { // Ring glow
+                        node.children[1].material.opacity = 0.4 + Math.sin(time + index) * 0.1;
+                    }
+                });
+                
+                // Animate connections with subtle pulse
+                this.connections.forEach((line, index) => {
+                    line.material.opacity = 0.7 + Math.sin(time * 2 + index * 0.2) * 0.1;
+                });
+                
+                // Animate particles if they exist
+                const particles = this.scene.children.find(child => child.type === 'Points');
+                if (particles) {
+                    particles.rotation.y = time * 0.1;
+                    particles.rotation.x = time * 0.05;
+                }
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new GenealogyTreeXR();
+        });
+    </script>
+</body>
+</html>
