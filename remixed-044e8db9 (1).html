@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Family Tree</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        function onSelect() {
+        
+        #container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+        }
+        
+        #ar-button, #vr-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            margin-right: 10px;
+            display: inline-block;
+        }
+        
+        #ar-button:hover, #vr-button:hover {
+            background: #45a049;
+        }
+        
+        #ar-button:disabled, #vr-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        #vr-button {
+            background: #2196F3;
+        }
+        
+        #vr-button:hover {
+            background: #1976D2;
+        }
+        
+        .person-label {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div id="ui">
+        <h3>AR Family Tree</h3>
+        <p>Experience your family tree in augmented reality!</p>
+        <p id="status">Initializing...</p>
+        <button id="ar-button" disabled>Enter AR</button>
+        <button id="vr-button" disabled>Enter VR</button>
+        <div style="margin-top: 10px; font-size: 12px;">
+            <p><strong>AR Mode:</strong> Point device at flat surface, tap to place</p>
+            <p><strong>VR Mode:</strong> Immersive 3D experience, use controllers to interact</p>
+            <p>• Use hand tracking when available</p>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, reticle, hitTestSource, hitTestSourceRequested = false;
+        let familyTreeGroup;
+        let isARActive = false;
+        let isVRActive = false;
+        let vrFamilyTree = null;
+        
+        // Sample family tree data - you can modify this
+        const familyData = {
+            name: "Great Grandparents",
+            generation: 0,
+            children: [
+                {
+                    name: "Grandparent 1",
+                    generation: 1,
+                    children: [
+                        {
+                            name: "Parent A",
+                            generation: 2,
+                            children: [
+                                { name: "Child 1", generation: 3 },
+                                { name: "Child 2", generation: 3 }
+                            ]
+                        },
+                        {
+                            name: "Parent B", 
+                            generation: 2,
+                            children: [
+                                { name: "Child 3", generation: 3 }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    name: "Grandparent 2",
+                    generation: 1,
+                    children: [
+                        {
+                            name: "Parent C",
+                            generation: 2,
+                            children: [
+                                { name: "Child 4", generation: 3 },
+                                { name: "Child 5", generation: 3 }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        function init() {
+            const container = document.getElementById('container');
+            
+            // Scene setup
+            scene = new THREE.Scene();
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            
+            // Renderer with WebXR support
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            renderer.setClearColor(0x000000, 0);
+            container.appendChild(renderer.domElement);
+            
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(0, 10, 5);
+            scene.add(directionalLight);
+            
+            // Reticle for AR placement
+            const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+            const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+            
+            // Create family tree
+            createFamilyTree();
+            
+            // Check WebXR support
+            checkARSupport();
+            
+            // Event listeners
+            setupEventListeners();
+            
+            // Start render loop
+            renderer.setAnimationLoop(render);
+        }
+        
+        function checkARSupport() {
+            const statusEl = document.getElementById('status');
+            const arButton = document.getElementById('ar-button');
+            const vrButton = document.getElementById('vr-button');
+            
+            if ('xr' in navigator) {
+                // Check AR support
+                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                    if (supported) {
+                        arButton.disabled = false;
+                        arButton.textContent = 'Enter AR';
+                    } else {
+                        arButton.textContent = 'AR Not Available';
+                    }
+                });
+        }
+        
+        function startVR() {
+            navigator.xr.requestSession('immersive-vr', {
+                optionalFeatures: ['hand-tracking']
+            }).then((session) => {
+                renderer.xr.setSession(session);
+                isVRActive = true;
+                document.getElementById('vr-button').textContent = 'Exit VR';
+                
+                // Create VR-specific family tree
+                if (!vrFamilyTree) {
+                    vrFamilyTree = familyTreeGroup.clone();
+                    vrFamilyTree.position.set(0, 0, -3); // Position in front of user
+                    vrFamilyTree.scale.set(1.5, 1.5, 1.5); // Make it bigger for VR
+                    scene.add(vrFamilyTree);
+                }
+                
+                // Hide preview tree in VR
+                familyTreeGroup.visible = false;
+                vrFamilyTree.visible = true;
+                
+                session.addEventListener('end', () => {
+                    isVRActive = false;
+                    document.getElementById('vr-button').textContent = 'Enter VR';
+                    // Show the preview tree again when exiting VR
+                    familyTreeGroup.visible = true;
+                    if (vrFamilyTree) {
+                        vrFamilyTree.visible = false;
+                    }
+                });
+                
+                session.addEventListener('select', onVRSelect);
+            });
+                
+                // Check VR support
+                navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+                    if (supported) {
+                        vrButton.disabled = false;
+                        vrButton.textContent = 'Enter VR';
+                        statusEl.textContent = 'AR/VR Ready!';
+                    } else {
+                        vrButton.textContent = 'VR Not Available';
+                    }
+                    
+                    // Update status based on what's available
+                    if (!arButton.disabled && !vrButton.disabled) {
+                        statusEl.textContent = 'AR & VR Ready!';
+                    } else if (!arButton.disabled) {
+                        statusEl.textContent = 'AR Ready!';
+                    } else if (!vrButton.disabled) {
+                        statusEl.textContent = 'VR Ready!';
+                    } else {
+                        statusEl.textContent = 'AR/VR not supported on this device';
+                    }
+                });
+            } else {
+                statusEl.textContent = 'WebXR not supported';
+                arButton.textContent = 'WebXR Not Available';
+                vrButton.textContent = 'WebXR Not Available';
+            }
+        }
+        
+        function setupEventListeners() {
+            const arButton = document.getElementById('ar-button');
+            const vrButton = document.getElementById('vr-button');
+            
+            arButton.addEventListener('click', () => {
+                if (isARActive) {
+                    renderer.xr.getSession().end();
+                } else {
+                    startAR();
+                }
+            });
+            
+            vrButton.addEventListener('click', () => {
+                if (isVRActive) {
+                    renderer.xr.getSession().end();
+                } else {
+                    startVR();
+                }
+            });
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        function startAR() {
+            navigator.xr.requestSession('immersive-ar', {
+                requiredFeatures: ['hit-test'],
+                optionalFeatures: ['hand-tracking']
+            }).then((session) => {
+                renderer.xr.setSession(session);
+                isARActive = true;
+                document.getElementById('ar-button').textContent = 'Exit AR';
+                
+                session.addEventListener('end', () => {
+                    isARActive = false;
+                    document.getElementById('ar-button').textContent = 'Enter AR';
+                    hitTestSourceRequested = false;
+                    hitTestSource = null;
+                    // Show the preview tree again when exiting AR
+                    familyTreeGroup.visible = true;
+                });
+                
+                session.requestReferenceSpace('viewer').then((referenceSpace) => {
+                    session.requestHitTestSource({ space: referenceSpace }).then((source) => {
+                        hitTestSource = source;
+                    });
+                });
+                
+                session.addEventListener('select', onSelect);
+            });
+        }
+        
+        function createFamilyTree() {
+            familyTreeGroup = new THREE.Group();
+            familyTreeGroup.visible = true; // Make visible by default
+            familyTreeGroup.position.set(0, 0, -2); // Position in front of camera
+            scene.add(familyTreeGroup);
+            
+            const positions = calculatePositions(familyData);
+            createFamilyNodes(familyData, positions, familyTreeGroup);
+            createConnections(familyData, positions, familyTreeGroup);
+        }
+        
+        function calculatePositions(data, positions = new Map(), x = 0, y = 0, generation = 0) {
+            positions.set(data.name, { x: x, y: -generation * 0.8, z: 0 });
+            
+            if (data.children) {
+                const childCount = data.children.length;
+                const startX = x - (childCount - 1) * 0.6 / 2;
+                
+                data.children.forEach((child, index) => {
+                    const childX = startX + index * 0.6;
+                    calculatePositions(child, positions, childX, y, generation + 1);
+                });
+            }
+            
+            return positions;
+        }
+        
+        function createFamilyNodes(data, positions, parent) {
+            const pos = positions.get(data.name);
+            
+            // Create person node
+            const geometry = new THREE.SphereGeometry(0.08, 16, 16);
+            const material = new THREE.MeshLambertMaterial({ 
+                color: getGenerationColor(data.generation) 
+            });
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(pos.x, pos.y, pos.z);
+            sphere.userData = { name: data.name, generation: data.generation };
+            parent.add(sphere);
+            
+            // Create text label
+            createTextLabel(data.name, pos, parent);
+            
+            // Process children
+            if (data.children) {
+                data.children.forEach(child => {
+                    createFamilyNodes(child, positions, parent);
+                });
+            }
+        }
+        
+        function createConnections(data, positions, parent) {
+            if (data.children) {
+                const parentPos = positions.get(data.name);
+                
+                data.children.forEach(child => {
+                    const childPos = positions.get(child.name);
+                    
+                    const points = [];
+                    points.push(new THREE.Vector3(parentPos.x, parentPos.y, parentPos.z));
+                    points.push(new THREE.Vector3(childPos.x, childPos.y, childPos.z));
+                    
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                    const material = new THREE.LineBasicMaterial({ color: 0x888888, linewidth: 2 });
+                    const line = new THREE.Line(geometry, material);
+                    parent.add(line);
+                    
+                    createConnections(child, positions, parent);
+                });
+            }
+        }
+        
+        function createTextLabel(text, position, parent) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+            
+            context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            context.fillStyle = '#333333';
+            context.font = 'bold 24px Arial';
+            context.textAlign = 'center';
+            context.fillText(text, canvas.width / 2, canvas.height / 2 + 8);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const geometry = new THREE.PlaneGeometry(0.3, 0.075);
+            const mesh = new THREE.Mesh(geometry, material);
+            
+            mesh.position.set(position.x, position.y + 0.15, position.z);
+            parent.add(mesh);
+        }
+        
+        function getGenerationColor(generation) {
+            const colors = [0xff6b6b, 0x4ecdc4, 0x45b7d1, 0x96ceb4, 0xffa726];
+            return colors[generation % colors.length];
+        }
+        
+        function onVRSelect() {
+            // VR interaction - could rotate or scale the tree
+            if (vrFamilyTree && vrFamilyTree.visible) {
+                // Add a gentle pulse animation
+                const originalScale = vrFamilyTree.scale.x;
+                animateScale(vrFamilyTree, { x: originalScale * 1.1, y: originalScale * 1.1, z: originalScale * 1.1 }, 200);
+                setTimeout(() => {
+                    animateScale(vrFamilyTree, { x: originalScale, y: originalScale, z: originalScale }, 200);
+                }, 200);
+            }
+        }
+            if (reticle.visible) {
+                // Create a new instance of the family tree for AR
+                const arFamilyTree = familyTreeGroup.clone();
+                arFamilyTree.position.setFromMatrixPosition(reticle.matrix);
+                scene.add(arFamilyTree);
+                reticle.visible = false;
+                
+                // Add a gentle animation
+                arFamilyTree.scale.set(0.1, 0.1, 0.1);
+                animateScale(arFamilyTree, { x: 1, y: 1, z: 1 }, 1000);
+                
+                // Hide the preview tree when in AR
+                familyTreeGroup.visible = false;
+            }
+        }
+        
+        function animateScale(object, targetScale, duration) {
+            const startScale = { ...object.scale };
+            const startTime = Date.now();
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+                
+                object.scale.set(
+                    startScale.x + (targetScale.x - startScale.x) * eased,
+                    startScale.y + (targetScale.y - startScale.y) * eased,
+                    startScale.z + (targetScale.z - startScale.z) * eased
+                );
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            }
+            animate();
+        }
+        
+        function render(timestamp, frame) {
+            if (frame && hitTestSource) {
+                const hitTestResults = frame.getHitTestResults(hitTestSource);
+                
+                if (hitTestResults.length > 0) {
+                    const hit = hitTestResults[0];
+                    reticle.visible = true;
+                    reticle.matrix.fromArray(hit.getPose(renderer.xr.getReferenceSpace()).transform.matrix);
+                } else {
+                    reticle.visible = false;
+                }
+            }
+            
+            // Rotate family tree slowly for better viewing
+            if (familyTreeGroup.visible) {
+                familyTreeGroup.rotation.y = Math.sin(timestamp * 0.0005) * 0.1;
+            }
+            
+            // Also rotate any AR instances and VR tree
+            scene.children.forEach(child => {
+                if (child !== familyTreeGroup && child.type === 'Group' && child.children.length > 0) {
+                    child.rotation.y = Math.sin(timestamp * 0.0005) * 0.1;
+                }
+            });
+            
+            // Rotate VR tree if active
+            if (vrFamilyTree && vrFamilyTree.visible) {
+                vrFamilyTree.rotation.y = Math.sin(timestamp * 0.0008) * 0.15; // Slightly different rotation for VR
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Initialize the app
+        init();
+    </script>
+</body>
+</html>
