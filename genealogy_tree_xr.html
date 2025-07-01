@@ -11,13 +11,20 @@
         when selecting a person the persons info should be shown on screen in desktop mode and in AR/VR mode visible in view. 
 
         fixed (thanks): 
-        - the desktop mode shows no persons or tree, earlier versions did,
+        - the desktop mode shows no persons or tree, earlier versions did, (selecting a person in the artifact browser works)
         - the AR and VR buttons switch mode but do not show anything
         issues:
+        - in desktop mode on the Quest3 default browser, 
+            zooming in and out using the controller works correctly, 
+            but clicking (trigger, or A button) does not select a person, the person info is not shown.
+            To compare: clicking a mouse in the Quest3 desktop browser does select a person and shows the info. 
         - the controllers dont work in AR or VR mode.
         - handtracking does not work
         new features:
         - in genealogy usually a family object is used linking the father and the mother, also the children are linked to this object. (to avoid links crossing) 
+        - register all requested functionality in a comment in the code, so it may be used as a prompt to regenerate the code.  
+        - is there a newer version of three.js that supports the latest WebXR features?
+        - the gentle floating can be used in all three modes.
         -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
