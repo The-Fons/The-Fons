@@ -6,15 +6,16 @@
     <title>Enhanced AR/VR Genealogy Tree</title>
     <!--
         REQUESTED FUNCTIONALITY REGISTER:
+        Show a genealogy tree.
+        ✓ Family objects linking parents and children (avoiding crossing lines)
+        ✓ Person info display in all modes (on-screen in desktop, floating UI in AR/VR)
         ✓ Desktop mode with clickable family members showing info
+        ✓ Tree positioned in front of viewer in all modes
         ✓ AR mode with hand tracking and controller support
         ✓ VR mode with hand tracking and controller support  
         ✓ Quest3 controller support (trigger and A button)
         ✓ Hand tracking support in AR/VR
-        ✓ Family objects linking parents and children (avoiding crossing lines)
         ✓ Gentle floating animation in all three modes
-        ✓ Tree positioned in front of viewer in all modes
-        ✓ Person info display in all modes (on-screen in desktop, floating UI in AR/VR)
         ✓ Improved genealogy structure with family nodes
         ✓ Enhanced interaction feedback
         ✓ Better XR session management
@@ -27,27 +28,22 @@
         - Improved controller raycast detection
         - Added family nodes to prevent crossing lines
         - Enhanced XR session handling
-    -->
-        <!--
-        Dear Claude, please make me 
-        a webpage to show a sample genealogy tree in regular 2D desktop mode for the artifact viewer or in AR or VR selectable by buttons, for use on a Quest3.
-        make sure the ar/vr object is in front of the viewer in all three modes.
-        when selecting a person the persons info should be shown on screen in desktop mode and in AR/VR mode visible in view. 
 
-        fixed (thanks): 
         issues:
-        - in desktop mode on the Quest3 default browser, 
-            zooming in and out using the controller works correctly, 
-            but clicking (trigger, or A button) does not select a person, the person info is not shown.
-            To compare: clicking a mouse in the Quest3 desktop browser does select a person and shows the info. 
-        - the controllers dont work in AR or VR mode.
-        - handtracking does not work
-        new features:
-        - in genealogy usually a family object is used linking the father and the mother, also the children are linked to this object. (to avoid links crossing) 
-        - register all requested functionality in a comment in the code, so it may be used as a prompt to regenerate the code.  
-        - is there a newer version of three.js that supports the latest WebXR features?
-        - the gentle floating can be used in all three modes.
-        -->
+        - the behaviour of the person info popup is different in desktop mode than in AR/VR mode, desktop mode hase a close buttun , AR/Vr closes after a few seconds. would be nice to have the same userexperience in all modes.
+        - couldd you give each grandparents different parents. This testdata might represent an illegal situation in some countries.  ;-)
+        - after returning from VR, "reset view" puts the tree behind the info box in desktop mode not in the center of the view.
+    
+
+        New functionality:
+        - make the controllers visible in VR mode, it usually helps if users see (some part of) themselves in VR
+        - add standard controller methods to move, rotate , enlarge/reduce the tree in all modes, so parts of larger trees could be examined more easily.
+        - could you add standard movement, rotation methods to the controllers to be able to view the tree from other viewpoints in VR, if possibile also in desktop mode.
+        - please give the info box a close and/or minimise button to have more space for the tree on smaller devices
+        
+        In you have suggestions for improvent please add them in here also.
+    -->
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
