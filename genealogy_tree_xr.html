@@ -28,6 +28,26 @@
         - Added family nodes to prevent crossing lines
         - Enhanced XR session handling
     -->
+        <!--
+        Dear Claude, please make me 
+        a webpage to show a sample genealogy tree in regular 2D desktop mode for the artifact viewer or in AR or VR selectable by buttons, for use on a Quest3.
+        make sure the ar/vr object is in front of the viewer in all three modes.
+        when selecting a person the persons info should be shown on screen in desktop mode and in AR/VR mode visible in view. 
+
+        fixed (thanks): 
+        issues:
+        - in desktop mode on the Quest3 default browser, 
+            zooming in and out using the controller works correctly, 
+            but clicking (trigger, or A button) does not select a person, the person info is not shown.
+            To compare: clicking a mouse in the Quest3 desktop browser does select a person and shows the info. 
+        - the controllers dont work in AR or VR mode.
+        - handtracking does not work
+        new features:
+        - in genealogy usually a family object is used linking the father and the mother, also the children are linked to this object. (to avoid links crossing) 
+        - register all requested functionality in a comment in the code, so it may be used as a prompt to regenerate the code.  
+        - is there a newer version of three.js that supports the latest WebXR features?
+        - the gentle floating can be used in all three modes.
+        -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
