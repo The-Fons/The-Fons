@@ -427,7 +427,7 @@
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             canvas.width = 512;
-            canvas.height = 384;
+            canvas.height = 420; // Increased height for close button
             
             // Background
             context.fillStyle = 'rgba(255, 255, 255, 0.95)';
@@ -438,34 +438,46 @@
             context.lineWidth = 4;
             context.strokeRect(0, 0, canvas.width, canvas.height);
             
+            // Close button area (top-right)
+            const closeButtonSize = 40;
+            const closeButtonX = canvas.width - closeButtonSize - 10;
+            const closeButtonY = 10;
+            
+            context.fillStyle = '#e74c3c';
+            context.fillRect(closeButtonX, closeButtonY, closeButtonSize, closeButtonSize);
+            context.fillStyle = '#fff';
+            context.font = 'bold 24px Arial';
+            context.textAlign = 'center';
+            context.fillText('×', closeButtonX + closeButtonSize/2, closeButtonY + closeButtonSize/2 + 8);
+            
             // Text content
             context.fillStyle = '#333';
             context.font = 'bold 32px Arial';
             context.textAlign = 'center';
-            context.fillText(person.name, canvas.width / 2, 60);
+            context.fillText(person.name, canvas.width / 2, 70);
             
             context.font = '24px Arial';
-            context.fillText(`Born: ${person.birth}`, canvas.width / 2, 120);
+            context.fillText(`Born: ${person.birth}`, canvas.width / 2, 130);
             if (person.death) {
-                context.fillText(`Died: ${person.death}`, canvas.width / 2, 160);
+                context.fillText(`Died: ${person.death}`, canvas.width / 2, 170);
             } else {
                 context.fillStyle = '#27ae60';
-                context.fillText('Still alive', canvas.width / 2, 160);
+                context.fillText('Still alive', canvas.width / 2, 170);
             }
             
             context.fillStyle = '#7f8c8d';
             context.font = '20px Arial';
-            context.fillText(`Generation ${person.generation + 1}`, canvas.width / 2, 220);
+            context.fillText(`Generation ${person.generation + 1}`, canvas.width / 2, 230);
             
             const familyInfo = getFamilyInfo(person.id);
             context.font = '18px Arial';
             const lines = familyInfo.split('\n');
             lines.forEach((line, index) => {
-                context.fillText(line, canvas.width / 2, 260 + index * 25);
+                context.fillText(line, canvas.width / 2, 270 + index * 25);
             });
             
             // Create floating panel
-            const panelGeometry = new THREE.PlaneGeometry(2, 1.5);
+            const panelGeometry = new THREE.PlaneGeometry(2, 1.64); // Adjusted for new height
             const panelTexture = new THREE.CanvasTexture(canvas);
             const panelMaterial = new THREE.MeshBasicMaterial({ 
                 map: panelTexture,
@@ -475,17 +487,15 @@
             
             xrInfoPanel = new THREE.Mesh(panelGeometry, panelMaterial);
             xrInfoPanel.position.set(0, 1.5, -1.5);
+            xrInfoPanel.userData = { isInfoPanel: true, closeButtonBounds: {
+                x: closeButtonX, y: closeButtonY, 
+                width: closeButtonSize, height: closeButtonSize
+            }};
             scene.add(xrInfoPanel);
             
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                if (xrInfoPanel) {
-                    scene.remove(xrInfoPanel);
-                    xrInfoPanel = null;
-                }
-            }, 5000);
+            // Remove auto-close - now requires manual close like desktop mode
         }
-
+        
         function getFamilyInfo(personId) {
             const relationships = [];
             
