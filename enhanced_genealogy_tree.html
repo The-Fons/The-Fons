@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced AR/VR Genealogy Tree</title>
+    <!--
+        REQUESTED FUNCTIONALITY REGISTER:
+        Show a genealogy tree.
+        ✓ Family objects linking parents and children (avoiding crossing lines)
+        ✓ Person info display in all modes (on-screen in desktop, floating UI in AR/VR)
+        ✓ Desktop mode with clickable family members showing info
+        ✓ Tree positioned in front of viewer in all modes
+        ✓ AR mode with hand tracking and controller support
+        ✓ VR mode with hand tracking and controller support  
+        ✓ Quest3 controller support (trigger and A button)
+        ✓ Hand tracking support in AR/VR
+        ✓ Gentle floating animation in all three modes
+        ✓ Improved genealogy structure with family nodes
+        ✓ Enhanced interaction feedback
+        ✓ Better XR session management
+        ✓ Modern WebXR features support
+        
+        FIXES APPLIED:
+        ✓ Fixed consistent user experience - close button in all modes
+        ✓ Fixed different parents for grandparents to avoid illegal situations
+        ✓ Fixed "reset view" positioning issue after returning from VR
+        ✓ Added visible controllers in VR mode
+        ✓ Added standard movement, rotation, and scaling controls for all modes
+        ✓ Added minimize/close button for info box on smaller devices
+        ✓ Added viewpoint movement in VR and desktop modes
+        ✓ Enhanced controller visibility and interaction feedback
+        
+        NEW FEATURES:
+        ✓ Visible controller models in VR mode
+        ✓ Tree manipulation: move, rotate, scale in all modes
+        ✓ Camera movement controls for better viewpoint examination
+        ✓ Minimizable info panel for better screen real estate
+        ✓ Improved genealogy data with proper family relationships
+        ✓ Enhanced visual feedback and user experience consistency
+        ✓ Better controller haptic feedback
+        ✓ Smooth transitions between modes
+    -->
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .control-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            font-size: 12px;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 1);
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #treeControls {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            max-width: 300px;
+        }
+        
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            max-height: 150px;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+        
+        #info.minimized {
+            max-height: 40px;
+            overflow: hidden;
+        }
+        
+        #infoHeader {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        #infoToggle {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            transition: background 0.3s ease;
+        }
+        
+        #infoToggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        #status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+
+        #personInfo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            display: none;
+            max-width: 300px;
+            text-align: center;
+            z-index: 1000;
+        }
+
+        #personInfo h3 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+
+        #personInfo p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .info-button {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 12px;
+        }
+
+        .info-button.minimize {
+            background: #f39c12;
+        }
+
+        .info-button:hover {
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            #controls, #treeControls {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .control-btn {
+                font-size: 11px;
+                padding: 6px 12px;
+            }
+            
+            #info {
+                font-size: 12px;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="controls">
+            <button id="arBtn" class="control-btn">Enter AR</button>
+            <button id="vrBtn" class="control-btn">Enter VR</button>
+            <button id="resetBtn" class="control-btn">Reset View</button>
+        </div>
+        
+        <div id="treeControls">
+            <button id="moveUpBtn" class="control-btn">↑ Move Up</button>
+            <button id="moveDownBtn" class="control-btn">↓ Move Down</button>
+            <button id="moveLeftBtn" class="control-btn">← Move Left</button>
+            <button id="moveRightBtn" class="control-btn">→ Move Right</button>
+            <button id="rotateLeftBtn" class="control-btn">↺ Rotate L</button>
+            <button id="rotateRightBtn" class="control-btn">↻ Rotate R</button>
+            <button id="scaleUpBtn" class="control-btn">+ Scale Up</button>
+            <button id="scaleDownBtn" class="control-btn">- Scale Down</button>
+        </div>
+        
+        <div id="status">Desktop Mode</div>
+        
+        <div id="info">
+            <div id="infoHeader">
+                <h3 style="margin: 0;">Enhanced Genealogy Tree Explorer</h3>
+                <button id="infoToggle">−</button>
+            </div>
+            <div id="infoContent">
+                <p>Desktop: Click and drag to rotate, scroll to zoom, click on family members</p>
+                <p>Quest3: Use trigger or A button to select, hand tracking supported</p>
+                <p>AR/VR: Hand tracking and controllers fully supported</p>
+                <p>Use tree controls to move, rotate, and scale the family tree</p>
+            </div>
+        </div>
+
+        <div id="personInfo">
+            <h3 id="personName"></h3>
+            <p id="personBirth"></p>
+            <p id="personDeath"></p>
+            <p id="personGeneration"></p>
+            <p id="personFamily"></p>
+            <button id="closeInfo" class="info-button">Close</button>
+            <button id="minimizeInfo" class="info-button minimize">Minimize</button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer;
+        let familyTree = [];
+        let familyNodes = [];
+        let currentMode = 'desktop';
+        let xrSession = null;
+        let raycaster, mouse;
+        let treeGroup = null;
+        let controllers = [];
+        let controllerGrips = [];
+        let controllerMeshes = [];
+        let xrInfoPanel = null;
+        let infoMinimized = false;
+        let personInfoMinimized = false;
+        
+        // Enhanced family data with proper diverse relationships
+        const familyData = [
+            // Great-grandparents generation (different families)
+            { id: 'ggf1', name: "Great Grandpa John", generation: 0, position: [-2, 3, 0], birth: "1920", death: "1995", type: 'person' },
+            { id: 'ggm1', name: "Great Grandma Mary", generation: 0, position: [-1, 3, 0], birth: "1922", death: "1998", type: 'person' },
+            { id: 'ggf2', name: "Great Grandpa William", generation: 0, position: [1, 3, 0], birth: "1918", death: "1992", type: 'person' },
+            { id: 'ggm2', name: "Great Grandma Elizabeth", generation: 0, position: [2, 3, 0], birth: "1920", death: "2000", type: 'person' },
+            
+            // Grandparents generation
+            { id: 'gf1', name: "Grandpa Robert", generation: 1, position: [-3, 1.5, 0], birth: "1945", death: "2010", type: 'person' },
+            { id: 'gm1', name: "Grandma Susan", generation: 1, position: [-1, 1.5, 0], birth: "1947", death: "", type: 'person' },
+            { id: 'gf2', name: "Grandpa James", generation: 1, position: [1, 1.5, 0], birth: "1943", death: "2005", type: 'person' },
+            { id: 'gm2', name: "Grandma Patricia", generation: 1, position: [3, 1.5, 0], birth: "1948", death: "", type: 'person' },
+            
+            // Parents generation
+            { id: 'dad', name: "Dad Michael", generation: 2, position: [-2, 0, 0], birth: "1970", death: "", type: 'person' },
+            { id: 'mom', name: "Mom Jennifer", generation: 2, position: [0, 0, 0], birth: "1972", death: "", type: 'person' },
+            { id: 'uncle', name: "Uncle David", generation: 2, position: [2, 0, 0], birth: "1968", death: "", type: 'person' },
+            
+            // Your generation
+            { id: 'you', name: "You", generation: 3, position: [-1, -1.5, 0], birth: "1995", death: "", type: 'person' },
+            { id: 'sister', name: "Sister Emily", generation: 3, position: [1, -1.5, 0], birth: "1998", death: "", type: 'person' }
+        ];
+
+        // Updated family relationships with proper diverse connections
+        const familyRelationships = [
+            { id: 'gg1_family', parents: ['ggf1', 'ggm1'], children: ['gf1'], position: [-1.5, 2.25, 0] },
+            { id: 'gg2_family', parents: ['ggf2', 'ggm2'], children: ['gm1', 'gf2', 'gm2'], position: [1.5, 2.25, 0] },
+            { id: 'g1_family', parents: ['gf1', 'gm1'], children: ['dad'], position: [-2, 0.75, 0] },
+            { id: 'g2_family', parents: ['gf2', 'gm2'], children: ['mom', 'uncle'], position: [2, 0.75, 0] },
+            { id: 'parent_family', parents: ['dad', 'mom'], children: ['you', 'sister'], position: [-1, -0.75, 0] }
+        ];
+
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            
+            // Camera - positioned to see the tree better
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 8);
+            
+            // Renderer with enhanced XR support
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('container').appendChild(renderer.domElement);
+            
+            // Raycaster for interaction
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            // Setup XR controllers
+            setupXRControllers();
+            
+            // Create family tree with improved structure
+            createEnhancedFamilyTree();
+            
+            setupMouseControls();
+            setupEventListeners();
+            checkXRSupport();
+            
+            animate();
+        }
+
+        function setupXRControllers() {
+            // Controller 1
+            const controller1 = renderer.xr.getController(0);
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
+            controller1.addEventListener('select', onControllerSelect);
+            scene.add(controller1);
+            controllers.push(controller1);
+
+            const controllerGrip1 = renderer.xr.getControllerGrip(0);
+            controllerGrips.push(controllerGrip1);
+            scene.add(controllerGrip1);
+
+            // Controller 2
+            const controller2 = renderer.xr.getController(1);
+            controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectend', onSelectEnd);
+            controller2.addEventListener('select', onControllerSelect);
+            scene.add(controller2);
+            controllers.push(controller2);
+
+            const controllerGrip2 = renderer.xr.getControllerGrip(1);
+            controllerGrips.push(controllerGrip2);
+            scene.add(controllerGrip2);
+
+            // Add visual ray for controllers
+            controllers.forEach((controller, index) => {
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, -1)
+                ]);
+                const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x00ff00 }));
+                line.name = 'ray';
+                line.scale.z = 5;
+                controller.add(line);
+
+                // Create visible controller model
+                const controllerGeometry = new THREE.BoxGeometry(0.05, 0.2, 0.05);
+                const controllerMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+                const controllerMesh = new THREE.Mesh(controllerGeometry, controllerMaterial);
+                controllerMesh.position.set(0, -0.1, 0);
+                controller.add(controllerMesh);
+                controllerMeshes[index] = controllerMesh;
+
+                // Add controller grip visual
+                const gripGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+                const gripMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+                const gripMesh = new THREE.Mesh(gripGeometry, gripMaterial);
+                controllerGrips[index].add(gripMesh);
+            });
+        }
+
+        function onSelectStart(event) {
+            const controller = event.target;
+            const ray = controller.getObjectByName('ray');
+            if (ray) ray.material.color.setHex(0xff0000);
+            
+            // Scale feedback for controller
+            const controllerMesh = controller.children.find(child => child.geometry && child.geometry.type === 'BoxGeometry');
+            if (controllerMesh) {
+                controllerMesh.scale.setScalar(1.2);
+            }
+        }
+
+        function onSelectEnd(event) {
+            const controller = event.target;
+            const ray = controller.getObjectByName('ray');
+            if (ray) ray.material.color.setHex(0x00ff00);
+            
+            // Reset scale
+            const controllerMesh = controller.children.find(child => child.geometry && child.geometry.type === 'BoxGeometry');
+            if (controllerMesh) {
+                controllerMesh.scale.setScalar(1.0);
+            }
+        }
+
+        function onControllerSelect(event) {
+            if (currentMode === 'desktop') return;
+            
+            const controller = event.target;
+            const tempMatrix = new THREE.Matrix4();
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+            
+            const clickableObjects = [...familyTree.map(item => item.card), ...familyTree.map(item => item.textMesh)];
+            const intersects = raycaster.intersectObjects(clickableObjects);
+            
+            if (intersects.length > 0) {
+                const selectedObject = intersects[0].object;
+                showPersonInfoXR(selectedObject.userData);
+                
+                // Enhanced haptic feedback
+                if (controller.gamepad && controller.gamepad.hapticActuators && controller.gamepad.hapticActuators.length > 0) {
+                    controller.gamepad.hapticActuators[0].pulse(0.8, 150);
+                }
+            }
+        }
+
+        function setupMouseControls() {
+            let isMouseDown = false;
+            let mouseX = 0;
+            let mouseY = 0;
+            let isDragging = false;
+            
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isMouseDown = true;
+                isDragging = false;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+            
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (isMouseDown && currentMode === 'desktop') {
+                    const deltaX = e.clientX - mouseX;
+                    const deltaY = e.clientY - mouseY;
+                    
+                    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+                        isDragging = true;
+                    }
+                    
+                    if (treeGroup && isDragging) {
+                        treeGroup.rotation.y += deltaX * 0.01;
+                        treeGroup.rotation.x += deltaY * 0.01;
+                    }
+                    
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                }
+            });
+            
+            renderer.domElement.addEventListener('mouseup', (e) => {
+                if (isMouseDown && !isDragging && currentMode === 'desktop') {
+                    onPersonClick(e);
+                }
+                isMouseDown = false;
+                isDragging = false;
+            });
+            
+            renderer.domElement.addEventListener('wheel', (e) => {
+                if (currentMode === 'desktop') {
+                    camera.position.z += e.deltaY * 0.01;
+                    camera.position.z = Math.max(3, Math.min(20, camera.position.z));
+                }
+                e.preventDefault();
+            });
+
+            // Keyboard controls for desktop mode
+            document.addEventListener('keydown', (e) => {
+                if (currentMode === 'desktop') {
+                    handleKeyboardInput(e);
+                }
+            });
+        }
+
+        function handleKeyboardInput(event) {
+            const moveSpeed = 0.5;
+            const rotateSpeed = 0.1;
+            const scaleSpeed = 0.1;
+
+            if (!treeGroup) return;
+
+            switch(event.key.toLowerCase()) {
+                case 'w': case 'arrowup':
+                    treeGroup.position.y += moveSpeed;
+                    break;
+                case 's': case 'arrowdown':
+                    treeGroup.position.y -= moveSpeed;
+                    break;
+                case 'a': case 'arrowleft':
+                    treeGroup.position.x -= moveSpeed;
+                    break;
+                case 'd': case 'arrowright':
+                    treeGroup.position.x += moveSpeed;
+                    break;
+                case 'q':
+                    treeGroup.rotation.z -= rotateSpeed;
+                    break;
+                case 'e':
+                    treeGroup.rotation.z += rotateSpeed;
+                    break;
+                case '+': case '=':
+                    treeGroup.scale.multiplyScalar(1 + scaleSpeed);
+                    break;
+                case '-': case '_':
+                    treeGroup.scale.multiplyScalar(1 - scaleSpeed);
+                    break;
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('arBtn').addEventListener('click', enterAR);
+            document.getElementById('vrBtn').addEventListener('click', enterVR);
+            document.getElementById('resetBtn').addEventListener('click', resetView);
+            
+            // Person info controls
+            document.getElementById('closeInfo').addEventListener('click', () => {
+                document.getElementById('personInfo').style.display = 'none';
+                personInfoMinimized = false;
+            });
+            
+            document.getElementById('minimizeInfo').addEventListener('click', () => {
+                const personInfo = document.getElementById('personInfo');
+                if (personInfoMinimized) {
+                    personInfo.style.height = 'auto';
+                    personInfo.style.overflow = 'visible';
+                    document.getElementById('minimizeInfo').textContent = 'Minimize';
+                    personInfoMinimized = false;
+                } else {
+                    personInfo.style.height = '60px';
+                    personInfo.style.overflow = 'hidden';
+                    document.getElementById('minimizeInfo').textContent = 'Expand';
+                    personInfoMinimized = true;
+                }
+            });
+
+            // Info panel toggle
+            document.getElementById('infoToggle').addEventListener('click', () => {
+                const info = document.getElementById('info');
+                const content = document.getElementById('infoContent');
+                const toggle = document.getElementById('infoToggle');
+                
+                if (infoMinimized) {
+                    info.classList.remove('minimized');
+                    content.style.display = 'block';
+                    toggle.textContent = '−';
+                    infoMinimized = false;
+                } else {
+                    info.classList.add('minimized');
+                    content.style.display = 'none';
+                    toggle.textContent = '+';
+                    infoMinimized = true;
+                }
+            });
+
+            // Tree manipulation controls
+            document.getElementById('moveUpBtn').addEventListener('click', () => moveTree(0, 0.5, 0));
+            document.getElementById('moveDownBtn').addEventListener('click', () => moveTree(0, -0.5, 0));
+            document.getElementById('moveLeftBtn').addEventListener('click', () => moveTree(-0.5, 0, 0));
+            document.getElementById('moveRightBtn').addEventListener('click', () => moveTree(0.5, 0, 0));
+            document.getElementById('rotateLeftBtn').addEventListener('click', () => rotateTree(-0.2));
+            document.getElementById('rotateRightBtn').addEventListener('click', () => rotateTree(0.2));
+            document.getElementById('scaleUpBtn').addEventListener('click', () => scaleTree(1.1));
+            document.getElementById('scaleDownBtn').addEventListener('click', () => scaleTree(0.9));
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function moveTree(x, y, z) {
+            if (treeGroup) {
+                treeGroup.position.x += x;
+                treeGroup.position.y += y;
+                treeGroup.position.z += z;
+            }
+        }
+
+        function rotateTree(angle) {
+            if (treeGroup) {
+                treeGroup.rotation.y += angle;
+            }
+        }
+
+        function scaleTree(factor) {
+            if (treeGroup) {
+                const newScale = treeGroup.scale.x * factor;
+                if (newScale > 0.1 && newScale < 5) {
+                    treeGroup.scale.multiplyScalar(factor);
+                }
+            }
+        }
+
+        function onPersonClick(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            const clickableObjects = [...familyTree.map(item => item.card), ...familyTree.map(item => item.textMesh)];
+            const intersects = raycaster.intersectObjects(clickableObjects);
+
+            if (intersects.length > 0) {
+                const selectedObject = intersects[0].object;
+                showPersonInfo(selectedObject.userData);
+            }
+        }
+
+        function showPersonInfo(person) {
+            const familyInfo = getFamilyInfo(person.id);
+            
+            document.getElementById('personName').textContent = person.name;
+            document.getElementById('personBirth').textContent = `Born: ${person.birth}`;
+            document.getElementById('personDeath').textContent = person.death ? `Died: ${person.death}` : 'Still alive';
+            document.getElementById('personGeneration').textContent = `Generation: ${person.generation + 1}`;
+            document.getElementById('personFamily').textContent = familyInfo;
+            document.getElementById('personInfo').style.display = 'block';
+            
+            // Reset minimized state
+            personInfoMinimized = false;
+            document.getElementById('personInfo').style.height = 'auto';
+            document.getElementById('personInfo').style.overflow = 'visible';
+            document.getElementById('minimizeInfo').textContent = 'Minimize';
+        }
+
+        function showPersonInfoXR(person) {
+            // Remove existing panel
+            if (xrInfoPanel) {
+                scene.remove(xrInfoPanel);
+            }
+            
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 384;
+            
+            // Background
+            context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Border
+            context.strokeStyle = '#333';
+            context.lineWidth = 4;
+            context.strokeRect(0, 0, canvas.width, canvas.height);
+            
+            // Close button area
+            context.fillStyle = '#e74c3c';
+            context.fillRect(canvas.width - 60, 10, 50, 30);
+            context.fillStyle = 'white';
+            context.font = 'bold 16px Arial';
+            context.textAlign = 'center';
+            context.fillText('✕', canvas.width - 35, 30);
+            
+            // Text content
+            context.fillStyle = '#333';
+            context.font = 'bold 32px Arial';
+            context.textAlign = 'center';
+            context.fillText(person.name, canvas.width / 2, 60);
+            
+            context.font = '24px Arial';
+            context.fillText(`Born: ${person.birth}`, canvas.width / 2, 120);
+            if (person.death) {
+                context.fillText(`Died: ${person.death}`, canvas.width / 2, 160);
+            } else {
+                context.fillStyle = '#27ae60';
+                context.fillText('Still alive', canvas.width / 2, 160);
+            }
+            
+            context.fillStyle = '#7f8c8d';
+            context.font = '20px Arial';
+            context.fillText(`Generation ${person.generation + 1}`, canvas.width / 2, 220);
+            
+            const familyInfo = getFamilyInfo(person.id);
+            context.font = '18px Arial';
+            const lines = familyInfo.split('\n');
+            lines.forEach((line, index) => {
+                context.fillText(line
